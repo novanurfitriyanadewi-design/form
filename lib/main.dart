@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'pages/welcome_page.dart';
+import 'pages/admin_shell.dart';
+import 'pages/member_home_page.dart';
 
 void main() => runApp(const PerpustakaanApp());
 
@@ -37,7 +40,7 @@ class PerpustakaanApp extends StatelessWidget {
           displayColor: kText,
         ),
       ),
-      home: const RegisterPage(),
+      home: const WelcomePage(),
     );
   }
 }
@@ -98,17 +101,44 @@ String formatDate(DateTime d) {
   return '${d.day} ${m[d.month - 1]} ${d.year}';
 }
 
-// Penyimpanan anggota sementara (di memori; hilang saat aplikasi ditutup).
-// Berisi 1 akun contoh agar validasi "sudah terdaftar" mudah diuji.
+// ============================================================
+// DATA AKUN (di memori; hilang saat aplikasi ditutup)
+//   Admin   : username adminperpus / password: password
+//   Anggota : siti@gmail.com / NIM 87654321 / siti123
+// ============================================================
 class Member {
-  final String email;
-  final String nim;
-  const Member(this.email, this.nim);
+  final String name, email, nim, password;
+  final String username; // dipakai untuk login admin (kosong untuk anggota)
+  final bool isAdmin;
+  const Member({
+    required this.name,
+    required this.email,
+    required this.nim,
+    required this.password,
+    this.username = '',
+    this.isAdmin = false,
+  });
 }
 
 class MemberRegistry {
+  // Akun yang sedang login (null = belum login)
+  static Member? current;
+
   static final List<Member> _members = [
-    const Member('budi@gmail.com', '12345678'),
+    const Member(
+      name: 'Admin Perpus',
+      username: 'adminperpus',
+      email: 'adminperpus@perpus.local',
+      nim: '00000000',
+      password: 'password',
+      isAdmin: true, // <-- admin perpustakaan
+    ),
+    const Member(
+      name: 'Siti Aminah',
+      email: 'siti@gmail.com',
+      nim: '87654321',
+      password: 'siti123',
+    ),
   ];
 
   static bool emailExists(String email) =>
@@ -117,11 +147,42 @@ class MemberRegistry {
   static bool nimExists(String nim) =>
       _members.any((m) => m.nim == nim.trim());
 
-  static void add(String email, String nim) =>
-      _members.add(Member(email.trim().toLowerCase(), nim.trim()));
+  // Registrasi = selalu anggota biasa (bukan admin)
+  static void add({
+    required String name,
+    required String email,
+    required String nim,
+    required String password,
+  }) {
+    final m = Member(
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      nim: nim.trim(),
+      password: password,
+    );
+    _members.add(m);
+    current = m;
+  }
+
+  // Login memakai NIM, email, ATAU username (admin) + password
+  static Member? login(String id, String password) {
+    final key = id.trim().toLowerCase();
+    for (final m in _members) {
+      final idMatch = m.email == key ||
+          m.nim == key ||
+          (m.username.isNotEmpty && m.username == key);
+      if (idMatch && m.password == password) {
+        current = m;
+        return m;
+      }
+    }
+    return null;
+  }
+
+  static void logout() => current = null;
 }
 
-// Kategori buku (dipakai di form registrasi & katalog)
+// Kategori buku (dipakai di form registrasi, katalog, dan form buku admin)
 const List<String> kGenres = [
   'Novel',
   'Teknologi',
@@ -137,7 +198,7 @@ const Map<String, IconData> kGenreIcons = {
 };
 
 // ============================================================
-// HALAMAN 1: REGISTRASI ANGGOTA PERPUSTAKAAN
+// HALAMAN: REGISTRASI ANGGOTA PERPUSTAKAAN
 // ============================================================
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -318,7 +379,7 @@ class _RegisterPageState extends State<RegisterPage> {
       _birthError = _birthDate == null ? 'Pilih tanggal lahir' : null;
     });
 
-    // Skenario 4: checkbox belum dicentang -> SnackBar peringatan
+    // Checkbox belum dicentang -> SnackBar peringatan
     if (!_agreed) {
       showAppSnack(
         context,
@@ -334,7 +395,7 @@ class _RegisterPageState extends State<RegisterPage> {
     _showConfirmationDialog();
   }
 
-  // Skenario 5: AlertDialog konfirmasi berisi ringkasan data
+  // AlertDialog konfirmasi berisi ringkasan data
   void _showConfirmationDialog() {
     showDialog(
       context: context,
@@ -401,13 +462,16 @@ class _RegisterPageState extends State<RegisterPage> {
               onPressed: () {
                 final name = _nameController.text.trim();
                 MemberRegistry.add(
-                  _emailController.text,
-                  _nimController.text,
+                  name: name,
+                  email: _emailController.text,
+                  nim: _nimController.text,
+                  password: _passwordController.text,
                 );
                 Navigator.pop(dialogContext);
-                Navigator.pushReplacement(
+                Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (_) => HomePage(name: name)),
+                      (route) => false,
                 );
               },
               child: const Text('Ya, Submit'),
@@ -503,10 +567,18 @@ class _RegisterPageState extends State<RegisterPage> {
             SafeArea(
               bottom: false,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 36),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.arrow_back_rounded,
+                          color: Colors.white),
+                      padding: EdgeInsets.zero,
+                      alignment: Alignment.centerLeft,
+                    ),
+                    const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -690,7 +762,8 @@ class _RegisterPageState extends State<RegisterPage> {
           backgroundColor: kField,
           selectedColor: kSoft,
           side: BorderSide(color: selected ? kPrimary : kSoft),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           onSelected: (v) => setState(() {
             if (v) {
               _selectedGenres.add(g);
@@ -880,7 +953,8 @@ class _RegisterPageState extends State<RegisterPage> {
                           .map((m) =>
                           DropdownMenuItem(value: m, child: Text(m)))
                           .toList(),
-                      validator: (v) => v == null ? 'Pilih program studi' : null,
+                      validator: (v) =>
+                      v == null ? 'Pilih program studi' : null,
                       onChanged: (v) => setState(() => _major = v),
                     ),
                     const SizedBox(height: 14),
@@ -962,362 +1036,22 @@ class _RegisterPageState extends State<RegisterPage> {
 }
 
 // ============================================================
-// MODEL BUKU
+// HomePage = pengarah berdasarkan peran (role)
+//   admin   -> AdminShell (sidebar: Buku, Anggota/REST API, Peminjaman)
+//   anggota -> MemberHomePage (katalog + pinjam saja)
+// Nama `HomePage(name: ...)` dipertahankan supaya login_page.dart
+// dan RegisterPage tidak perlu diubah.
 // ============================================================
-class Book {
-  final String title;
-  final String author;
-  final String category;
-  bool borrowed;
-
-  Book({
-    required this.title,
-    required this.author,
-    required this.category,
-    this.borrowed = false,
-  });
-}
-
-// ============================================================
-// HALAMAN 2: BERANDA PERPUSTAKAAN
-// ============================================================
-class HomePage extends StatefulWidget {
+class HomePage extends StatelessWidget {
   final String name;
   const HomePage({super.key, required this.name});
 
   @override
-  State<HomePage> createState() => _HomePageState();
-}
-
-class _HomePageState extends State<HomePage> {
-  final _searchController = TextEditingController();
-  String _query = '';
-  String _category = 'Semua';
-
-  final List<Book> _books = [
-    Book(title: 'Laskar Pelangi', author: 'Andrea Hirata', category: 'Novel'),
-    Book(title: 'Bumi Manusia', author: 'Pramoedya Ananta Toer', category: 'Novel'),
-    Book(title: 'Pemrograman Mobile dengan Flutter', author: 'Tim Dosen SI', category: 'Teknologi'),
-    Book(title: 'Sistem Informasi Manajemen', author: 'Jogiyanto H.M.', category: 'Teknologi'),
-    Book(title: 'Sejarah Islam Nusantara', author: 'Azyumardi Azra', category: 'Agama'),
-    Book(title: 'Fikih Muamalah Kontemporer', author: 'Tim Penulis', category: 'Agama'),
-    Book(title: 'Atomic Habits', author: 'James Clear', category: 'Pengembangan Diri'),
-    Book(title: 'Filosofi Teras', author: 'Henry Manampiring', category: 'Pengembangan Diri'),
-  ];
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  int get _borrowedCount => _books.where((b) => b.borrowed).length;
-  int get _availableCount => _books.length - _borrowedCount;
-
-  List<Book> get _filtered {
-    final q = _query.toLowerCase();
-    return _books.where((b) {
-      final matchCat = _category == 'Semua' || b.category == _category;
-      final matchQuery = q.isEmpty ||
-          b.title.toLowerCase().contains(q) ||
-          b.author.toLowerCase().contains(q);
-      return matchCat && matchQuery;
-    }).toList();
-  }
-
-  void _toggleBorrow(Book b) {
-    setState(() => b.borrowed = !b.borrowed);
-    showAppSnack(
-      context,
-      b.borrowed
-          ? '"${b.title}" berhasil dipinjam'
-          : '"${b.title}" sudah dikembalikan',
-      b.borrowed ? kPrimary : kSuccess,
-      b.borrowed ? Icons.bookmark_added_rounded : Icons.check_circle_rounded,
-    );
-  }
-
-  void _logout() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const RegisterPage()),
-    );
-  }
-
-  Widget _buildStatsCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        gradient: const LinearGradient(
-          colors: [kPrimary, kPrimaryDeep],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: kPrimary.withOpacity(0.35),
-            blurRadius: 28,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Koleksi Perpustakaan',
-              style: TextStyle(color: Colors.white70, fontSize: 13)),
-          const SizedBox(height: 6),
-          Text(
-            '${_books.length} Buku',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: _miniStat('Tersedia', _availableCount,
-                    Icons.library_books_rounded),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _miniStat('Dipinjam', _borrowedCount,
-                    Icons.bookmark_rounded),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _miniStat(String label, int value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.18),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 15,
-            backgroundColor: Colors.white.withOpacity(0.2),
-            child: Icon(icon, color: Colors.white, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: const TextStyle(color: Colors.white70, fontSize: 11)),
-              Text('$value',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCategoryChips() {
-    final cats = ['Semua', ...kGenres];
-    return SizedBox(
-      height: 40,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: cats.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final c = cats[i];
-          final selected = _category == c;
-          return ChoiceChip(
-            label: Text(c),
-            selected: selected,
-            showCheckmark: false,
-            backgroundColor: Colors.white,
-            selectedColor: kPrimary,
-            side: BorderSide(color: selected ? kPrimary : kSoft),
-            shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            labelStyle: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: selected ? Colors.white : kText,
-            ),
-            onSelected: (_) => setState(() => _category = c),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildBookTile(Book b) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: kPrimary.withOpacity(0.07),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 56,
-            height: 74,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              gradient: const LinearGradient(
-                colors: [kPrimary, kPrimaryDeep],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: Icon(kGenreIcons[b.category] ?? Icons.book_rounded,
-                color: Colors.white, size: 28),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(b.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 14.5)),
-                const SizedBox(height: 3),
-                Text(b.author,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: kMuted, fontSize: 12)),
-                const SizedBox(height: 8),
-                Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: kSoft,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(b.category,
-                      style: const TextStyle(
-                          color: kPrimaryDeep,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600)),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: b.borrowed ? kSoft : kPrimary,
-              foregroundColor: b.borrowed ? kPrimaryDeep : Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () => _toggleBorrow(b),
-            child: Text(b.borrowed ? 'Kembalikan' : 'Pinjam',
-                style:
-                const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final books = _filtered;
-    return Scaffold(
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 24,
-                  backgroundColor: kPrimary,
-                  child: Text(
-                    widget.name.isNotEmpty
-                        ? widget.name[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontSize: 18),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Selamat datang,',
-                          style: TextStyle(color: kMuted, fontSize: 13)),
-                      Text(
-                        widget.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: _logout,
-                  icon: const Icon(Icons.logout_rounded, color: kPrimary),
-                  tooltip: 'Keluar',
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _buildStatsCard(),
-            const SizedBox(height: 22),
-            TextField(
-              controller: _searchController,
-              onChanged: (v) => setState(() => _query = v),
-              decoration:
-              inputStyle('Cari judul atau penulis', Icons.search_rounded)
-                  .copyWith(fillColor: Colors.white),
-            ),
-            const SizedBox(height: 16),
-            _buildCategoryChips(),
-            const SizedBox(height: 20),
-            const Text('Katalog Buku',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            if (books.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(
-                  child: Text('Buku tidak ditemukan.',
-                      style: TextStyle(color: kMuted)),
-                ),
-              )
-            else
-              ...books.map(_buildBookTile),
-          ],
-        ),
-      ),
-    );
+    final me = MemberRegistry.current;
+    if (me != null && me.isAdmin) {
+      return AdminShell(name: name);
+    }
+    return MemberHomePage(name: name);
   }
 }

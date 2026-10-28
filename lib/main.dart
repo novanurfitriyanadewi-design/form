@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'pages/welcome_page.dart';
 import 'pages/admin_shell.dart';
 import 'pages/member_home_page.dart';
 
-void main() => runApp(const PerpustakaanApp());
+// main dibuat async supaya locale Indonesia bisa diinisialisasi
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('id_ID', null);
+  runApp(const PerpustakaanApp());
+}
 
 // ============================================================
 // WARNA & TEMA (PLUM ELEGAN)
@@ -103,7 +109,7 @@ String formatDate(DateTime d) {
 
 // ============================================================
 // DATA AKUN (di memori; hilang saat aplikasi ditutup)
-//   Admin   : username adminperpus / password: password
+//   Admin   : username nova / password: password
 //   Anggota : siti@gmail.com / NIM 87654321 / siti123
 // ============================================================
 class Member {
@@ -126,9 +132,9 @@ class MemberRegistry {
 
   static final List<Member> _members = [
     const Member(
-      name: 'Admin Perpus',
-      username: 'adminperpus',
-      email: 'adminperpus@perpus.local',
+      name: 'Nova',
+      username: 'nova',
+      email: 'nova@perpus.local',
       nim: '00000000',
       password: 'password',
       isAdmin: true, // <-- admin perpustakaan

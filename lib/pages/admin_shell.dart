@@ -5,6 +5,7 @@ import 'welcome_page.dart';
 import 'user_list_page.dart';
 import 'admin_books_page.dart';
 import 'admin_loans_page.dart';
+import 'kontak_menu_page.dart'; // <-- BARU
 
 // ============================================================
 // KERANGKA HALAMAN ADMIN (judul + tombol aksi + isi)
@@ -77,6 +78,7 @@ class _AdminShellState extends State<AdminShell> {
     (Icons.menu_book_rounded, 'Data Buku'),
     (Icons.groups_rounded, 'Data Anggota'),
     (Icons.swap_horiz_rounded, 'Peminjaman'),
+    (Icons.contacts_rounded, 'Kontak'), // <-- BARU
   ];
 
   final List<Widget> _pages = [
@@ -84,6 +86,7 @@ class _AdminShellState extends State<AdminShell> {
     const AdminBooksPage(),
     UserListPage(), // CRUD anggota via REST API (reqres.in) — khusus admin
     const AdminLoansPage(),
+    const KontakMenuPage(), // <-- BARU: tampil di dalam shell, sidebar tetap ada
   ];
 
   void _logout() {

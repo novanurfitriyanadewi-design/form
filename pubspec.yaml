@@ -14,6 +14,13 @@ dependencies:
   cupertino_icons: ^1.0.8
   http: ^1.2.2
 
+  # package tugas T6
+  convex_bottom_bar: ^3.2.0
+  faker: ^2.2.0
+  intl: ^0.20.2
+  dropdown_search: ^6.0.2
+  avatar_glow: ^3.0.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -22,3 +29,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/1.jpg
